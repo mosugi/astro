@@ -1,0 +1,33 @@
+---
+export interface Props {
+  title?: string;
+  date?: string;
+  tags?: string[];
+  cover?: string;
+  [key: string]: unknown;
+}
+
+const { title, date, tags, cover } = Astro.props;
+---
+
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title ?? 'Blog Post'}</title>
+  </head>
+  <body>
+    <article>
+      {cover && <img src={cover} alt="" />}
+      <h1>{title}</h1>
+      {date && <time datetime={date}>{date}</time>}
+      {tags && tags.length > 0 && (
+        <ul class="tags">
+          {tags.map((tag) => <li>{tag}</li>)}
+        </ul>
+      )}
+      <slot />
+    </article>
+  </body>
+</html>
