@@ -1,0 +1,24 @@
+---
+/**
+ * Legacy component for rendering Notion markdown content.
+ * @deprecated Use `render()` from `astro:content` with `deferredRender: true` instead.
+ *
+ * @example
+ * ```astro
+ * import { render } from 'astro:content';
+ * const { Content } = await render(post);
+ * <Content />
+ * ```
+ */
+import { render } from 'astro:content';
+import type { CollectionEntry } from 'astro:content';
+
+interface Props {
+  entry: CollectionEntry<string>;
+}
+
+const { entry } = Astro.props;
+const { Content } = await render(entry);
+---
+
+<Content />

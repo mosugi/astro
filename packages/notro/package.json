@@ -1,0 +1,19 @@
+{
+  "name": "notro",
+  "type": "module",
+  "version": "0.1.0",
+  "private": true,
+  "exports": {
+    ".": "./src/index.ts",
+    "./config": "./src/markdown/notroMarkdownConfig.ts"
+  },
+  "dependencies": {
+    "@notionhq/client": "^2.2.15",
+    "notion-to-md": "^3.1.1"
+  },
+  "devDependencies": {
+    "astro": "workspace:*",
+    "@astrojs/mdx": "workspace:*",
+    "typescript": "catalog:"
+  }
+}

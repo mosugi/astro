@@ -40,6 +40,8 @@ packages/**/e2e/**/fixtures/**/.astro/
 packages/**/e2e/**/fixtures/**/env.d.ts
 examples/**/.astro/
 examples/**/env.d.ts
+apps/**/.astro/
+apps/**/env.d.ts
 
 # make it easy for people to add project-specific Astro settings that they don't
 # want to share with others (see

@@ -1,0 +1,49 @@
+---
+import type { NotroPageData } from 'notro';
+
+interface Props extends NotroPageData {}
+
+const { title, description, pubDate, updatedDate, tags } = Astro.props;
+const formattedDate = pubDate.toLocaleDateString('ja-JP', {
+  year: 'numeric',
+  month: 'long',
+  day: 'numeric',
+});
+---
+
+<!doctype html>
+<html lang="ja">
+  <head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>{title}</title>
+    {description && <meta name="description" content={description} />}
+  </head>
+  <body>
+    <main>
+      <article>
+        <header>
+          <h1>{title}</h1>
+          <time datetime={pubDate.toISOString()}>{formattedDate}</time>
+          {
+            updatedDate && (
+              <p>
+                Updated: <time datetime={updatedDate.toISOString()}>{updatedDate.toLocaleDateString('ja-JP')}</time>
+              </p>
+            )
+          }
+          {
+            tags && tags.length > 0 && (
+              <ul>
+                {tags.map((tag) => (
+                  <li>{tag}</li>
+                ))}
+              </ul>
+            )
+          }
+        </header>
+        <slot />
+      </article>
+    </main>
+  </body>
+</html>
