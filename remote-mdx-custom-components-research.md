@@ -258,6 +258,242 @@ export function remoteMarkdownIntegration(): AstroIntegration {
 
 ---
 
+---
+
+## ライブローダーへの対応
+
+### ライブローダーの根本的な制約
+
+`LiveDataEntry` が持てるのは `rendered?: { html: string }` だけ:
+
+```ts
+// types/public/content.ts:165
+export interface LiveDataEntry<TData> {
+  id: string;
+  data: TData;
+  rendered?: { html: string };  // ← 静的HTMLのみ。deferredRender も filePath も持てない
+  cacheHint?: CacheHint;
+}
+```
+
+`render()` from `astro:content` はビルドタイムの `DataEntry` 専用 (`DataEntryMap` のみ型に含まれる)。
+ライブコレクションには `getLiveEntry()` / `getLiveCollection()` を使い、`render()` は呼べない。
+
+よって **「Viteのトランスフォームパイプライン」を使ったコンパイルはリクエスト時に不可能**。
+
+---
+
+### 解決策: `@mdx-js/mdx` の `evaluate()` を直接使う
+
+`@mdx-js/mdx` は `evaluate()` 関数を提供している。これはコンパイルと実行を1ステップで行い、
+MDXソース文字列から **実行可能なJSXコンポーネント関数** を直接返す。
+
+Astroの `jsx-runtime` は `evaluate()` が必要とする `jsx`, `jsxs`, `Fragment` をすべてエクスポートしている:
+
+```ts
+// astro/src/jsx-runtime/index.ts:94
+export { AstroJSX, Fragment, createVNode as jsx, createVNode as jsxDEV, createVNode as jsxs };
+```
+
+`createVNode` はAstro VNodeを作成し、Astroのレンダリングパイプラインが処理できる。
+
+#### 実装: `compileMdxForAstro()` ヘルパー
+
+```ts
+// src/utils/compile-mdx.ts
+import { evaluate } from '@mdx-js/mdx';
+import { jsx, jsxs, Fragment } from 'astro/jsx-runtime';
+import { __astro_tag_component__ } from 'astro/runtime/server/index.js';
+import remarkGfm from 'remark-gfm';
+
+export async function compileMdxForAstro(mdxSource: string) {
+  // @mdx-js/mdx の evaluate() でコンパイル + 実行
+  // Astroの jsx-runtime を渡すことでAstro VNodeが生成される
+  const mod = await evaluate(mdxSource, {
+    jsx,
+    jsxs,
+    Fragment,
+    remarkPlugins: [remarkGfm],
+    // rehypePlugins: [...],
+  });
+
+  const MDXContent = mod.default;
+  // MDX内の `export const components` があれば取得
+  const mdxComponents = (mod as any).components ?? {};
+
+  // vite-plugin-mdx-postprocess.ts の transformContentExport() と同等の処理を手動で行う:
+  // components propsのマージを行うラッパー
+  const Content = (props: Record<string, any> = {}) =>
+    MDXContent({
+      ...props,
+      components: {
+        Fragment,
+        ...mdxComponents,     // MDX内のexport components
+        ...props.components,  // 呼び出し側が渡すcomponents (h1: Heading など)
+      },
+    });
+
+  // vite-plugin-mdx-postprocess.ts の annotateContentExport() と同等
+  Content[Symbol.for('mdx-component')] = true;
+  Content[Symbol.for('astro.needsHeadRendering')] = true;
+  // Astroのレンダリングパイプラインに 'astro:jsx' レンダラーとして登録
+  __astro_tag_component__(Content, 'astro:jsx');
+
+  return Content;
+}
+```
+
+#### ライブローダー実装
+
+```ts
+// src/loaders/remote-live-mdx-loader.ts
+import type { LiveLoader, LiveDataEntry } from 'astro/loaders';
+
+export function remoteLiveMdxLoader({ apiUrl }: { apiUrl: string }): LiveLoader<{ title: string; body: string }> {
+  return {
+    name: 'remote-live-mdx-loader',
+
+    async loadEntry({ filter }) {
+      const response = await fetch(`${apiUrl}/${filter.id}`);
+      if (!response.ok) return undefined;
+      const post = await response.json();
+
+      return {
+        id: post.id,
+        data: {
+          title: post.title,
+          body: post.mdxContent, // ← 生のMDXを data に保持。rendered.html には入れない
+        },
+      } satisfies LiveDataEntry<{ title: string; body: string }>;
+    },
+
+    async loadCollection() {
+      const response = await fetch(apiUrl);
+      const posts = await response.json();
+      return {
+        entries: posts.map((post: any) => ({
+          id: post.id,
+          data: { title: post.title, body: post.mdxContent },
+        })),
+      };
+    },
+  };
+}
+```
+
+#### ページコンポーネントでの使用
+
+```astro
+---
+// src/pages/blog/[id].astro
+import { getLiveEntry } from 'astro:content';
+import { compileMdxForAstro } from '../../utils/compile-mdx';
+import Heading from '../../components/Heading.astro';
+
+const { entry, error } = await getLiveEntry('blog', { id: Astro.params.id });
+if (error || !entry) return Astro.redirect('/404');
+
+// リクエスト時にMDXをコンパイルしてJSXコンポーネントに変換
+const Content = await compileMdxForAstro(entry.data.body);
+---
+
+<!-- ✅ components propsが機能する: ContentはAstro JSXコンポーネント関数 -->
+<Content components={{ h1: Heading }} />
+```
+
+**評価**:
+- ✅ ライブローダーで `components` propsが機能する
+- ✅ `@mdx-js/mdx` の追加インストールが不要 (MDXインテグレーションの依存に含まれる)
+- ✅ remark/rehypeプラグインをカスタマイズ可能
+- ⚠️ **MDX内の `import` 文は解決できない** (バンドラーがないため)
+  - `import Foo from './components/Foo.astro'` は動かない
+  - 代わりに `components` propsで渡す設計が必要
+- ⚠️ リクエストごとにコンパイルが走る → パフォーマンスへの考慮が必要
+  - コンパイル結果を LRUキャッシュ等でキャッシュすることを推奨
+- ⚠️ スタイル/スクリプト伝播 (`collectedStyles` 等) が動かない
+
+#### パフォーマンス改善: コンパイル結果のキャッシュ
+
+```ts
+// src/utils/compile-mdx.ts (キャッシュ付き)
+import { createHash } from 'node:crypto';
+
+const cache = new Map<string, ReturnType<typeof compileMdxForAstro>>();
+
+export async function compileMdxCached(mdxSource: string) {
+  const hash = createHash('sha256').update(mdxSource).digest('hex');
+  if (cache.has(hash)) return cache.get(hash)!;
+
+  const promise = compileMdxForAstro(mdxSource);
+  cache.set(hash, promise);
+  return promise;
+}
+```
+
+---
+
+### MDXプラグイン (`createMdxProcessor`) を直接使う場合
+
+`@astrojs/mdx` の内部実装 (`plugins.ts`) で使われている `createMdxProcessor` を使うことも可能。
+これは `@mdx-js/mdx` の `createProcessor` のラッパーで、Astroのremarksプラグインやrehypeプラグインがプリセットされている。
+
+```ts
+// プロセッサーを再利用する場合 (evaluate() は毎回プロセッサーを作る)
+import { createMdxProcessor } from '@astrojs/mdx/internal'; // ← 公開APIではない
+import { VFile } from 'vfile';
+
+// ※ このAPIは公開されていない。以下と同等のことを @mdx-js/mdx で直接行う:
+import { createProcessor } from '@mdx-js/mdx';
+
+const processor = createProcessor({
+  jsx: true,
+  jsxImportSource: 'astro',
+  format: 'mdx',
+  remarkPlugins: [remarkGfm],
+});
+```
+
+`createProcessor` → `processor.process(vfile)` でコンパイルしてもJavaScriptの **文字列** が得られるだけ。
+それを実行するには `run()` が必要:
+
+```ts
+import { createProcessor, run } from '@mdx-js/mdx';
+import * as runtime from 'astro/jsx-runtime';
+import { VFile } from 'vfile';
+
+const processor = createProcessor({
+  outputFormat: 'function-body', // ← run() で実行可能な形式
+  remarkPlugins: [remarkGfm],
+});
+
+// コンパイル (重いので一度だけ行い結果をキャッシュ)
+const compiled = await processor.process(new VFile(mdxSource));
+const code = String(compiled.value);
+
+// 実行 (軽い)
+const { default: MDXContent } = await run(code, runtime);
+```
+
+`evaluate()` = `compile()` with `outputFormat: 'function-body'` + `run()` の組み合わせ。
+プロセッサーを再利用したい場合 (パフォーマンス) は `createProcessor` + `run()` が有利。
+
+---
+
+## まとめ: 方法の比較
+
+| 方法 | ビルドタイムローダー | ライブローダー | components props | MDX import | スタイル伝播 |
+|------|:-:|:-:|:-:|:-:|:-:|
+| `renderMarkdown()` + `rendered.html` | ✅ | ✅ | ❌ | ❌ | ❌ |
+| ファイル書き出し + `deferredRender: true` | ✅ | ❌ | ✅ | ✅ | ✅ |
+| `evaluate()` from @mdx-js/mdx (ページで呼び出し) | ✅ | ✅ | ✅ | ❌ | ❌ |
+| Vite仮想モジュール + `deferredRender` | △要Astro改造 | ❌ | ✅ | ✅ | ✅ |
+
+**推奨**:
+- ビルドタイムローダー → **ファイル書き出し + `deferredRender: true`** (MDX import も含め完全サポート)
+- ライブローダー → **`evaluate()` をページコンポーネントで呼び出し** (`components` propsは動く)
+
+---
+
 ## 参考: deferredRender の動作フロー
 
 ```
