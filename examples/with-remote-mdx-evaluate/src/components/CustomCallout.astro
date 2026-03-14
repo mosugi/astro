@@ -1,0 +1,36 @@
+---
+/**
+ * カスタム引用ブロック (blockquote) コンポーネント
+ *
+ * <Content components={{ blockquote: CustomCallout }} /> で渡す。
+ */
+interface Props {
+	type?: 'info' | 'warning' | 'tip';
+}
+const { type = 'info' } = Astro.props;
+---
+
+<div class={`callout callout--${type}`}>
+	<slot />
+</div>
+
+<style>
+	.callout {
+		border-left: 4px solid;
+		padding: 1rem 1.25rem;
+		margin: 1.5rem 0;
+		border-radius: 0 0.5rem 0.5rem 0;
+	}
+	.callout--info {
+		border-color: #3b82f6;
+		background: #eff6ff;
+	}
+	.callout--warning {
+		border-color: #f59e0b;
+		background: #fffbeb;
+	}
+	.callout--tip {
+		border-color: #10b981;
+		background: #ecfdf5;
+	}
+</style>

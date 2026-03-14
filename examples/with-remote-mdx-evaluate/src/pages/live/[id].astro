@@ -1,0 +1,66 @@
+---
+/**
+ * ライブコレクション + evaluate() によるリモートMDXレンダリング
+ *
+ * getLiveEntry() でリクエストごとにAPIからMDXを取得し、
+ * compileMdxCached() で evaluate() を使ってAstroコンポーネントに変換する。
+ *
+ * <Content components={{...}} /> のカスタムコンポーネントが正しく機能する。
+ */
+import { getLiveEntry } from 'astro:content';
+import CustomCallout from '../../components/CustomCallout.astro';
+import CustomHeading from '../../components/CustomHeading.astro';
+import { compileMdxCached } from '../../utils/compile-mdx';
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/404');
+
+// ライブコレクションからエントリを取得 (リクエストごとにAPIを呼ぶ)
+const { entry, error } = await getLiveEntry('blog', { id });
+
+if (error) {
+	console.error('Failed to load entry:', error);
+	return Astro.redirect('/500');
+}
+if (!entry) {
+	return Astro.redirect('/404');
+}
+
+// evaluate() でMDXソースをAstroコンポーネントにコンパイル。
+// compileMdxCached() は同じ内容のMDXを重複コンパイルしないようキャッシュする。
+const Content = await compileMdxCached(entry.data.body);
+---
+
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="utf-8" />
+		<title>{entry.data.title}</title>
+	</head>
+	<body>
+		<article>
+			<header>
+				<p>
+					<time datetime={entry.data.publishedAt.toISOString()}>
+						{entry.data.publishedAt.toLocaleDateString('ja-JP')}
+					</time>
+				</p>
+			</header>
+
+			<!--
+				ここが核心部分。
+				Content は evaluate() でコンパイルされた本物のJSXコンポーネント関数なので、
+				components propsが正しく機能する。
+
+				- h1: MDX内の # が CustomHeading にマッピングされる
+				- blockquote: MDX内の > 引用ブロックが CustomCallout にマッピングされる
+			-->
+			<Content
+				components={{
+					h1: CustomHeading,
+					blockquote: CustomCallout,
+				}}
+			/>
+		</article>
+	</body>
+</html>
