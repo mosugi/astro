@@ -1,0 +1,43 @@
+---
+/**
+ * ライブコレクション一覧ページ
+ */
+import { getLiveCollection } from 'astro:content';
+
+const { entries, error } = await getLiveCollection('blog');
+
+if (error) {
+	console.error('Failed to load collection:', error);
+}
+---
+
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="utf-8" />
+		<title>ブログ一覧 (ライブローダー)</title>
+	</head>
+	<body>
+		<h1>ブログ一覧</h1>
+		<p>
+			<small>ライブローダー経由でAPIからリクエストごとに取得</small>
+		</p>
+		{
+			error ? (
+				<p>コンテンツの取得に失敗しました。</p>
+			) : (
+				<ul>
+					{entries?.map((entry) => (
+						<li>
+							<a href={`/live/${entry.id}`}>{entry.data.title}</a>
+							<br />
+							<time datetime={entry.data.publishedAt.toISOString()}>
+								{entry.data.publishedAt.toLocaleDateString('ja-JP')}
+							</time>
+						</li>
+					))}
+				</ul>
+			)
+		}
+	</body>
+</html>
