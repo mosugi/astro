@@ -1,0 +1,92 @@
+---
+/**
+ * ライブコレクション + evaluate() + Notion コンポーネントマッピング
+ *
+ * 1. getLiveEntry() でリクエストごとにAPIからMDXを取得
+ * 2. compileMdxCached() で evaluate() を使ってAstroコンポーネントに変換
+ * 3. <Content components={notionComponents} /> で全 Notion ブロックをカスタムレンダリング
+ */
+import { getLiveEntry } from 'astro:content';
+import { notionComponents } from '../../components/notion/index';
+import { compileMdxCached } from '../../utils/compile-mdx';
+
+const { id } = Astro.params;
+if (!id) return Astro.redirect('/404');
+
+const { entry, error } = await getLiveEntry('blog', { id });
+
+if (error) {
+	console.error('Failed to load entry:', error);
+	return Astro.redirect('/500');
+}
+if (!entry) {
+	return Astro.redirect('/404');
+}
+
+const Content = await compileMdxCached(entry.data.body);
+---
+
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="utf-8" />
+		<meta name="viewport" content="width=device-width" />
+		<title>{entry.data.title}</title>
+		<style>
+			:root { font-family: system-ui, sans-serif; line-height: 1.6; }
+			body { max-width: 48rem; margin: 2rem auto; padding: 0 1rem; color: #111827; }
+			article header { border-bottom: 1px solid #e5e7eb; padding-bottom: 1rem; margin-bottom: 1.5rem; }
+			article header h1 { font-size: 2rem; font-weight: 700; margin: 0 0 0.5rem; }
+			article header time { color: #6b7280; font-size: 0.875rem; }
+			/* コードブロックのデフォルトスタイル */
+			pre { background: #1e293b; color: #e2e8f0; padding: 1rem; border-radius: 0.5rem; overflow-x: auto; font-size: 0.875rem; }
+			code { font-family: 'Fira Code', 'Cascadia Code', monospace; }
+			p code { background: #f1f5f9; padding: 0.1em 0.3em; border-radius: 0.25em; font-size: 0.9em; }
+			/* リスト */
+			ul, ol { padding-left: 1.5rem; }
+			li { margin: 0.25rem 0; }
+			/* チェックリスト (remarkGfm) */
+			li:has(input[type="checkbox"]) { list-style: none; margin-left: -1.5rem; }
+			/* 水平線 */
+			hr { border: none; border-top: 1px solid #e5e7eb; margin: 1.5rem 0; }
+			/* ナビゲーション */
+			nav.page-nav { margin-top: 2rem; padding-top: 1rem; border-top: 1px solid #e5e7eb; }
+			nav.page-nav a { color: #6b7280; text-decoration: none; }
+			nav.page-nav a:hover { color: #111827; }
+		</style>
+	</head>
+	<body>
+		<article>
+			<header>
+				<h1>{entry.data.title}</h1>
+				<time datetime={entry.data.publishedAt.toISOString()}>
+					{entry.data.publishedAt.toLocaleDateString('ja-JP', { year: 'numeric', month: 'long', day: 'numeric' })}
+				</time>
+			</header>
+
+			<!--
+				Notion Enhanced Markdown の全ブロックタイプを
+				notionComponents でマッピングしてレンダリング。
+
+				notionComponents に含まれる主なマッピング:
+				  callout        → Callout.astro  (カラー背景 + アイコン)
+				  details        → Toggle.astro   (折りたたみ)
+				  summary        → ToggleTitle.astro
+				  columns/column → Columns.astro / Column.astro
+				  h1-h4          → H1-H4.astro    (color 属性対応)
+				  blockquote     → Quote.astro
+				  table/tr/td    → TableBlock/Row/Cell.astro (color 対応)
+				  span           → StyledSpan.astro (color/underline 対応)
+				  img            → ImageBlock.astro
+				  mention-*      → Mention.astro / MentionDate.astro
+				  empty-block    → EmptyBlock.astro
+				  ... 他全ブロック
+			-->
+			<Content components={notionComponents} />
+		</article>
+
+		<nav class="page-nav">
+			<a href="/live/">← 一覧に戻る</a>
+		</nav>
+	</body>
+</html>

@@ -1,0 +1,12 @@
+---
+/**
+ * <col color="Color">
+ *
+ * 列に背景色を適用する。色の優先度は セル > 行 > 列。
+ * MDX の `components.col` にマッピングされる。
+ */
+import { colorToCSS } from './colors';
+interface Props { color?: string; }
+const { color } = Astro.props;
+---
+<col style={colorToCSS(color)} />

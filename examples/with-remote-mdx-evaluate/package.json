@@ -1,0 +1,21 @@
+{
+  "name": "@example/with-remote-mdx-evaluate",
+  "type": "module",
+  "version": "0.0.1",
+  "private": true,
+  "engines": {
+    "node": ">=22.12.0"
+  },
+  "scripts": {
+    "dev": "astro dev",
+    "build": "astro build",
+    "preview": "astro preview",
+    "astro": "astro"
+  },
+  "dependencies": {
+    "@astrojs/mdx": "workspace:*",
+    "astro": "workspace:*",
+    "remark-gfm": "^4.0.1",
+    "vfile": "^6.0.3"
+  }
+}

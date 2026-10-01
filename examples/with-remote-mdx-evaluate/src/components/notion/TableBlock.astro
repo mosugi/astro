@@ -1,0 +1,63 @@
+---
+/**
+ * <table fit-page-width="true|false" header-row="true|false" header-column="true|false">
+ *   ...
+ * </table>
+ *
+ * MDX の `components.table` にマッピングされる。
+ * 色の優先度 (高→低): セル > 行 > 列
+ */
+interface Props {
+	'fit-page-width'?: string;
+	'header-row'?: string;
+	'header-column'?: string;
+}
+
+const {
+	'fit-page-width': fitPageWidth = 'false',
+	'header-row': headerRow = 'false',
+	'header-column': headerColumn = 'false',
+} = Astro.props;
+---
+
+<div
+	class:list={[
+		'notion-table-wrapper',
+		{ 'notion-table-wrapper--full': fitPageWidth === 'true' },
+	]}
+>
+	<table
+		class:list={[
+			'notion-table',
+			{ 'notion-table--header-row': headerRow === 'true' },
+			{ 'notion-table--header-col': headerColumn === 'true' },
+		]}
+	>
+		<slot />
+	</table>
+</div>
+
+<style>
+	.notion-table-wrapper {
+		overflow-x: auto;
+		margin: 0.75rem 0;
+	}
+	.notion-table-wrapper--full {
+		width: 100%;
+	}
+	.notion-table {
+		border-collapse: collapse;
+		font-size: 0.9375rem;
+		min-width: 100%;
+	}
+	/* header-row: 最初の行を太字に */
+	.notion-table--header-row :global(tr:first-child td) {
+		font-weight: 600;
+		background-color: #f9fafb;
+	}
+	/* header-column: 最初の列を太字に */
+	.notion-table--header-col :global(tr td:first-child) {
+		font-weight: 600;
+		background-color: #f9fafb;
+	}
+</style>

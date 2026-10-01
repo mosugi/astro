@@ -1,0 +1,57 @@
+---
+/**
+ * サンプルのホームページ
+ */
+---
+
+<!doctype html>
+<html lang="ja">
+	<head>
+		<meta charset="utf-8" />
+		<title>リモートMDX + カスタムコンポーネント サンプル</title>
+	</head>
+	<body>
+		<h1>リモートMDX + カスタムコンポーネント</h1>
+		<p>
+			<code>@mdx-js/mdx</code> の <code>evaluate()</code> を使って、
+			APIから取得したMDXコンテンツに <code>components</code> propsを適用するサンプルです。
+		</p>
+
+		<h2>デモ</h2>
+		<ul>
+			<li>
+				<a href="/live/">ライブコレクション一覧</a> — リクエストごとにAPIから取得
+			</li>
+		</ul>
+
+		<h2>ポイント</h2>
+		<pre><code>
+// リモートMDXをコンパイル
+const Content = await compileMdxCached(entry.data.body);
+
+// components propsが正しく機能する ✅
+&lt;Content components=&#123;&#123; h1: CustomHeading &#125;&#125; /&gt;
+		</code></pre>
+
+		<h2>仕組み</h2>
+		<ol>
+			<li>
+				ライブローダーが生のMDXソースを <code>data.body</code> に保持<br />
+				(<code>rendered.html</code> には入れない)
+			</li>
+			<li>
+				<code>compileMdxCached()</code> が <code>evaluate()</code> でMDXをコンパイル
+			</li>
+			<li>
+				<code>evaluate()</code> に <code>astro/jsx-runtime</code> を渡すことで<br />
+				Astro VNode を生成するJSX関数が得られる
+			</li>
+			<li>
+				<code>__astro_tag_component__(Content, 'astro:jsx')</code> でAstroレンダラーに登録
+			</li>
+			<li>
+				<code>&lt;Content components=&#123;&#123;h1: CustomHeading&#125;&#125; /&gt;</code> が機能する
+			</li>
+		</ol>
+	</body>
+</html>
